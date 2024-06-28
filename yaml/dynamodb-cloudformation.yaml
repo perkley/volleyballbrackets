@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Venue and Bracket Information System with Real-time Updates'
+
+Resources:
+  # DynamoDB Tables (similar to previous example)
+  VenuesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      # ... (as before)
+
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      # ... (as before)
+
+  BracketsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      # ... (as before)
+
+  # AppSync API
+  GraphQLAPI:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: VenueBracketAPI
+      AuthenticationType: API_KEY  # Consider other auth types for production
+
+  # AppSync Schema
+  GraphQLSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLAPI.ApiId
+      Definition: |
+        type Venue {
+          id: ID!
+          name: String!
+          # other fields...
+        }
+        type Event {
+          id: ID!
+          venueId: ID!
+          name: String!
+          # other fields...
+        }
+        type Bracket {
+          id: ID!
+          eventId: ID!
+          # other fields...
+        }
+        type Query {
+          getVenue(id: ID!): Venue
+          listEvents(venueId: ID!): [Event]
+          getBracket(id: ID!): Bracket
+        }
+        type Mutation {
+          updateBracket(id: ID!, data: BracketInput!): Bracket
+        }
+        type Subscription {
+          onUpdateBracket(id: ID!): Bracket
+        }
+        # Define inputs, etc.
+
+  # AppSync DataSource for DynamoDB
+  DynamoDBDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLAPI.ApiId
+      Name: DynamoDBDataSource
+      Type: AMAZON_DYNAMODB
+      ServiceRoleArn: !GetAtt AppSyncDynamoDBServiceRole.Arn
+      DynamoDBConfig:
+        TableName: !Ref BracketsTable  # Example, repeat for other tables
+
+  # IAM Role for AppSync to access DynamoDB
+  AppSyncDynamoDBServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: 
+                  - !GetAtt VenuesTable.Arn
+                  - !GetAtt EventsTable.Arn
+                  - !GetAtt BracketsTable.Arn
+
+  # Add resolvers, Lambda functions, and other resources as needed
