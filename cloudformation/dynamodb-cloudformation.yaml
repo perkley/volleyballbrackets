@@ -2,21 +2,60 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Venue and Bracket Information System with Real-time Updates'
 
 Resources:
-  # DynamoDB Tables (similar to previous example)
+  # DynamoDB Tables
   VenuesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      # ... (as before)
+      TableName: Venues
+      AttributeDefinitions:
+        - AttributeName: VenueId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: VenueId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
 
   EventsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      # ... (as before)
+      TableName: Events
+      AttributeDefinitions:
+        - AttributeName: EventId
+          AttributeType: S
+        - AttributeName: VenueId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: EventId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: VenueIdIndex
+          KeySchema:
+            - AttributeName: VenueId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
 
   BracketsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      # ... (as before)
+      TableName: Brackets
+      AttributeDefinitions:
+        - AttributeName: BracketId
+          AttributeType: S
+        - AttributeName: EventId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: BracketId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EventIdIndex
+          KeySchema:
+            - AttributeName: EventId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
 
   # AppSync API
   GraphQLAPI:
