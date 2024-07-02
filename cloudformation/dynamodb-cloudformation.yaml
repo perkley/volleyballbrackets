@@ -138,5 +138,3 @@ Resources:
                   - !GetAtt VenuesTable.Arn
                   - !GetAtt EventsTable.Arn
                   - !GetAtt BracketsTable.Arn
-
-  # Add resolvers, Lambda functions, and other resources as needed

@@ -2,6 +2,7 @@
 
 # dependencies
 amplifyapp/node_modules/
+amplify/southernlava-frontend/node_modules/
 /.pnp
 .pnp.js
 

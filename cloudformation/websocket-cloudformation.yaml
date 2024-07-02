@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Real-time updates using WebSocket API and DynamoDB'
+
+Resources:
+  # DynamoDB Table
+  DataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: RealTimeData
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # WebSocket API
+  WebSocketAPI:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: RealTimeDataAPI
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  # Connect Route
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Join 
+        - /
+        - - integrations
+          - !Ref ConnectIntegration
+
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationUri: 
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConnectFunction.Arn}/invocations
+
+  # Lambda function for handling WebSocket connect
+  ConnectFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: WebSocketConnect
+      Handler: index.handler
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const ddb = new AWS.DynamoDB.DocumentClient({ apiVersion: '2012-08-10', region: process.env.AWS_REGION });
+
+          exports.handler = async event => {
+            const putParams = {
+              TableName: process.env.TABLE_NAME,
+              Item: {
+                connectionId: event.requestContext.connectionId
+              }
+            };
+          
+            try {
+              await ddb.put(putParams).promise();
+            } catch (err) {
+              return { statusCode: 500, body: 'Failed to connect: ' + JSON.stringify(err) };
+            }
+          
+            return { statusCode: 200, body: 'Connected.' };
+          };
+      Runtime: nodejs20.x
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DataTable
+
+  # Add similar resources for disconnect and default routes
+
+  # Stage
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      StageName: prod
+      Description: Prod Stage
+      AutoDeploy: true
+
+Outputs:
+  WebSocketURL:
+    Description: "WebSocket URL"
+    Value: !Join 
+      - ''
+      - - 'wss://'
+        - !Ref WebSocketAPI
+        - '.execute-api.'
+        - !Ref 'AWS::Region'
+        - '.amazonaws.com/'
+        - !Ref WebSocketStage

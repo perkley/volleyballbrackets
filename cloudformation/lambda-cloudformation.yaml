@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Venue and Bracket Information System with Real-time Updates'
+
+Resources:
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource: !GetAtt VenuesTable.Arn
+
+  # Create Venue Lambda
+  CreateVenueLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CreateVenue
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+          exports.handler = async (event) => {
+            const venue = JSON.parse(event.body);
+            const params = {
+              TableName: process.env.VENUES_TABLE,
+              Item: venue
+            };
+            
+            try {
+              await dynamodb.put(params).promise();
+              return { statusCode: 201, body: JSON.stringify(venue) };
+            } catch (error) {
+              return { statusCode: 500, body: JSON.stringify(error) };
+            }
+          };
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          VENUES_TABLE: !Ref VenuesTable
+
+  # Read Venue Lambda
+  ReadVenueLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ReadVenue
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+          exports.handler = async (event) => {
+            const venueId = event.pathParameters.id;
+            const params = {
+              TableName: process.env.VENUES_TABLE,
+              Key: { VenueId: venueId }
+            };
+            
+            try {
+              const result = await dynamodb.get(params).promise();
+              if (result.Item) {
+                return { statusCode: 200, body: JSON.stringify(result.Item) };
+              } else {
+                return { statusCode: 404, body: JSON.stringify({ message: "Venue not found" }) };
+              }
+            } catch (error) {
+              return { statusCode: 500, body: JSON.stringify(error) };
+            }
+          };
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          VENUES_TABLE: !Ref VenuesTable
+
+  # Update Venue Lambda
+  UpdateVenueLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: UpdateVenue
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+          exports.handler = async (event) => {
+            const venueId = event.pathParameters.id;
+            const updateData = JSON.parse(event.body);
+            const params = {
+              TableName: process.env.VENUES_TABLE,
+              Key: { VenueId: venueId },
+              UpdateExpression: "set #name = :name",
+              ExpressionAttributeNames: { '#name': 'name' },
+              ExpressionAttributeValues: { ':name': updateData.name },
+              ReturnValues: "ALL_NEW"
+            };
+            
+            try {
+              const result = await dynamodb.update(params).promise();
+              return { statusCode: 200, body: JSON.stringify(result.Attributes) };
+            } catch (error) {
+              return { statusCode: 500, body: JSON.stringify(error) };
+            }
+          };
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          VENUES_TABLE: !Ref VenuesTable
+
+  # Delete Venue Lambda
+  DeleteVenueLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: DeleteVenue
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+          exports.handler = async (event) => {
+            const venueId = event.pathParameters.id;
+            const params = {
+              TableName: process.env.VENUES_TABLE,
+              Key: { VenueId: venueId }
+            };
+            
+            try {
+              await dynamodb.delete(params).promise();
+              return { statusCode: 204, body: JSON.stringify({ message: "Venue deleted successfully" }) };
+            } catch (error) {
+              return { statusCode: 500, body: JSON.stringify(error) };
+            }
+          };
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          VENUES_TABLE: !Ref VenuesTable
+
+
+
+
+
+[cloudshell-user@ip-10-140-109-240 ~]$ aws sts get-caller-identity
+{
+    "UserId": "AROA4G5J5PXZZBJ6SSIQI:user2989494=Douglas_Tietjen",
+    "Account": "839485586931",
+    "Arn": "arn:aws:sts::839485586931:assumed-role/voclabs/user2989494=Douglas_Tietjen"
+}
+[cloudshell-user@ip-10-140-109-240 ~]$ aws iam list-attached-role-policies --role-name LabRole
+{
+    "AttachedPolicies": [
+        {
+            "PolicyName": "AmazonSSMManagedInstanceCore",
+            "PolicyArn": "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        },
+        {
+            "PolicyName": "AmazonEKSClusterPolicy",
+            "PolicyArn": "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+        },
+        {
+            "PolicyName": "AmazonEC2ContainerRegistryReadOnly",
+            "PolicyArn": "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        },
+        {
+            "PolicyName": "AmazonEKSWorkerNodePolicy",
+            "PolicyArn": "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        },
+        {
+            "PolicyName": "c107064a2512485l5573515t1w839485586931-VocLabPolicy1-CnXSVytOezik",
+            "PolicyArn": "arn:aws:iam::839485586931:policy/c107064a2512485l5573515t1w839485586931-VocLabPolicy1-CnXSVytOezik"
+        },
+        {
+            "PolicyName": "c107064a2512485l5573515t1w839485586931-VocLabPolicy2-kQN7DZTsXdT7",
+            "PolicyArn": "arn:aws:iam::839485586931:policy/c107064a2512485l5573515t1w839485586931-VocLabPolicy2-kQN7DZTsXdT7"
+        },
+        {
+            "PolicyName": "c107064a2512485l5573515t1w839485586931-VocLabPolicy3-xd57VHDN01P6",
+            "PolicyArn": "arn:aws:iam::839485586931:policy/c107064a2512485l5573515t1w839485586931-VocLabPolicy3-xd57VHDN01P6"
+        }
+    ]
+}
